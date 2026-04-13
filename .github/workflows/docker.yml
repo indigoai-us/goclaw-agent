@@ -8,7 +8,7 @@ on:
     branches: [main]
 
 env:
-  IMAGE_NAME: indigoai/goclaw-agent
+  IMAGE_NAME: indigogoclaw/goclaw-agent
 
 jobs:
   build-and-push:
