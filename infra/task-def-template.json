@@ -1,0 +1,59 @@
+{
+  "family": "goclaw-child-${CHILD_NAME}",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "${CPU:-512}",
+  "memory": "${MEMORY:-1024}",
+  "executionRoleArn": "${EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${CHILD_TASK_ROLE_ARN}",
+  "containerDefinitions": [
+    {
+      "name": "agent",
+      "image": "${AGENT_IMAGE}",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "GOCLAW_AGENT_NAME", "value": "${CHILD_NAME}" },
+        { "name": "GOCLAW_AGENT_PORT", "value": "3000" },
+        { "name": "GOCLAW_MANAGER_URL", "value": "https://${BASE_DOMAIN}" },
+        { "name": "GOCLAW_AGENT_DOMAIN", "value": "${CHILD_NAME}.${BASE_DOMAIN}" },
+        { "name": "AWS_REGION", "value": "${AWS_REGION:-us-east-1}" },
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "GOCLAW_S3_BUCKET", "value": "${GOCLAW_S3_BUCKET}" }
+      ],
+      "secrets": [
+        {
+          "name": "GOCLAW_AGENT_API_KEY",
+          "valueFrom": "${AGENT_API_KEY_SECRET_ARN}"
+        },
+        {
+          "name": "RESEND_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:804849608251:secret:goclaw/resend-api-key-ZgoM8J"
+        }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))\""],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 15
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/goclaw-children",
+          "awslogs-region": "${AWS_REGION:-us-east-1}",
+          "awslogs-stream-prefix": "${CHILD_NAME}"
+        }
+      }
+    }
+  ],
+  "tags": [
+    { "key": "goclaw:agent-name", "value": "${CHILD_NAME}" }
+  ]
+}

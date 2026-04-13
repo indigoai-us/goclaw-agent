@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "autoMemoryDirectory": "/workspace/group/memory",
+    "allow": [
+      "Bash(*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)",
+      "Glob(*)",
+      "Grep(*)",
+      "WebSearch(*)",
+      "WebFetch(*)",
+      "NotebookEdit(*)",
+      "Task(*)",
+      "TaskOutput(*)",
+      "TaskStop(*)",
+      "TodoWrite(*)",
+      "Skill(*)",
+      "mcp__nanoclaw__*"
+    ],
+    "deny": []
+  },
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PermissionRequest\", \"decision\": {\"behavior\": \"allow\"}}}'"
+          }
+        ]
+      }
+    ]
+  }
+}

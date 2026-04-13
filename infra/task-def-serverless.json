@@ -1,0 +1,108 @@
+{
+  "family": "goclaw-child-serverless-${CHILD_NAME}",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "${CPU:-512}",
+  "memory": "${MEMORY:-1024}",
+  "ephemeralStorage": {
+    "sizeInGiB": 5
+  },
+  "executionRoleArn": "${EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${CHILD_TASK_ROLE_ARN}",
+  "tags": [
+    { "key": "Project", "value": "goclaw" },
+    { "key": "Component", "value": "child-agent-serverless" },
+    { "key": "agentId", "value": "${AGENT_ID}" }
+  ],
+  "containerDefinitions": [
+    {
+      "name": "agent",
+      "image": "${AGENT_SERVERLESS_IMAGE}",
+      "essential": true,
+      "readonlyRootFilesystem": true,
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "mountPoints": [
+        {
+          "sourceVolume": "tmp",
+          "containerPath": "/tmp",
+          "readOnly": false
+        },
+        {
+          "sourceVolume": "agent-state",
+          "containerPath": "/agent",
+          "readOnly": false
+        }
+      ],
+      "environment": [
+        { "name": "GOCLAW_AGENT_NAME", "value": "${CHILD_NAME}" },
+        { "name": "GOCLAW_AGENT_ID", "value": "${AGENT_ID}" },
+        { "name": "GOCLAW_AGENT_PORT", "value": "3000" },
+        { "name": "GOCLAW_COMPUTE_MODE", "value": "serverless" },
+        { "name": "GOCLAW_STATE_BUCKET", "value": "${GOCLAW_S3_BUCKET}" },
+        { "name": "GOCLAW_MANAGER_URL", "value": "https://${BASE_DOMAIN}" },
+        { "name": "AWS_REGION", "value": "${AWS_REGION:-us-east-1}" },
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "GOCLAW_EXECUTION_TIMEOUT_MS", "value": "${EXECUTION_TIMEOUT_MS:-1800000}" }
+      ],
+      "secrets": [
+        {
+          "name": "GOCLAW_AGENT_API_KEY",
+          "valueFrom": "${AGENT_API_KEY_SECRET_ARN}"
+        }
+      ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "node -e \"fetch('http://localhost:3000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))\""
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 15
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/goclaw/agents/${AGENT_ID}",
+          "awslogs-region": "${AWS_REGION:-us-east-1}",
+          "awslogs-stream-prefix": "serverless",
+          "awslogs-create-group": "true"
+        }
+      },
+      "linuxParameters": {
+        "initProcessEnabled": true,
+        "capabilities": {
+          "drop": ["ALL"]
+        }
+      },
+      "stopTimeout": 30,
+      "ulimits": [
+        {
+          "name": "nofile",
+          "softLimit": 65536,
+          "hardLimit": 65536
+        },
+        {
+          "name": "nproc",
+          "softLimit": 1024,
+          "hardLimit": 2048
+        }
+      ]
+    }
+  ],
+  "volumes": [
+    {
+      "name": "tmp",
+      "host": {}
+    },
+    {
+      "name": "agent-state",
+      "host": {}
+    }
+  ]
+}

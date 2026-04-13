@@ -1,0 +1,46 @@
+{
+  "name": "goclaw-agent",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Standalone agent container powered by the Claude Agent SDK. Deploy autonomous AI agents on any cloud.",
+  "main": "dist/index.js",
+  "bin": {
+    "goclaw-agent-server": "dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "start:runner": "node dist/index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.34",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "cron-parser": "^5.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "files": [
+    "dist",
+    "config",
+    "scripts",
+    "infra",
+    "Dockerfile"
+  ],
+  "keywords": [
+    "claude",
+    "agent",
+    "container",
+    "docker",
+    "ecs",
+    "fargate",
+    "ai",
+    "autonomous"
+  ],
+  "license": "MIT"
+}

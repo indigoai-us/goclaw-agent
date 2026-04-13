@@ -1,0 +1,117 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  goClaw Child Agent Security Group — restricts network egress to HTTPS only
+  (port 443). No SSH, no arbitrary ports. Agents can call external APIs but
+  cannot scan internal networks or open back-channels.
+
+# ---------------------------------------------------------------------------
+# Parameters
+# ---------------------------------------------------------------------------
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC to deploy into (same VPC as the goClaw fleet)
+
+  AlbSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: ALB security group ID — allows inbound from ALB for health checks
+    Default: ''
+
+Conditions:
+  HasAlb: !Not [!Equals [!Ref AlbSecurityGroupId, '']]
+
+# ---------------------------------------------------------------------------
+# Resources
+# ---------------------------------------------------------------------------
+Resources:
+
+  # =========================================================================
+  # Child Agent Security Group — HTTPS-only egress
+  # =========================================================================
+
+  ChildAgentSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: >-
+        goClaw child agent sandbox — HTTPS-only outbound. No inbound except
+        ALB health checks. Prevents lateral movement and arbitrary port access.
+      GroupName: goclaw-child-agent-sg
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: goclaw-child-agent-sg
+        - Key: Project
+          Value: goclaw
+        - Key: Component
+          Value: child-agent-sandbox
+
+  # ---- Inbound: ALB health checks only (conditional) ----
+
+  IngressFromAlb:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: HasAlb
+    Properties:
+      GroupId: !Ref ChildAgentSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3000
+      ToPort: 3000
+      SourceSecurityGroupId: !Ref AlbSecurityGroupId
+      Description: Allow ALB health checks on agent port
+
+  # ---- Outbound: HTTPS only (443) ----
+
+  EgressHttpsIpv4:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref ChildAgentSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: 0.0.0.0/0
+      Description: HTTPS outbound to any IPv4 (APIs, S3, Telegram, etc.)
+
+  EgressHttpsIpv6:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref ChildAgentSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIpv6: ::/0
+      Description: HTTPS outbound to any IPv6
+
+  # ---- DNS resolution (required for HTTPS to work) ----
+
+  EgressDnsUdp:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref ChildAgentSecurityGroup
+      IpProtocol: udp
+      FromPort: 53
+      ToPort: 53
+      CidrIp: 0.0.0.0/0
+      Description: DNS resolution (UDP)
+
+  EgressDnsTcp:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref ChildAgentSecurityGroup
+      IpProtocol: tcp
+      FromPort: 53
+      ToPort: 53
+      CidrIp: 0.0.0.0/0
+      Description: DNS resolution (TCP fallback)
+
+# ---------------------------------------------------------------------------
+# Outputs
+# ---------------------------------------------------------------------------
+Outputs:
+  ChildAgentSecurityGroupId:
+    Description: Security group ID for child agent tasks (HTTPS-only egress)
+    Value: !Ref ChildAgentSecurityGroup
+    Export:
+      Name: goclaw-child-agent-sg
+
+  ChildAgentSecurityGroupArn:
+    Description: Security group ARN
+    Value: !GetAtt ChildAgentSecurityGroup.GroupId

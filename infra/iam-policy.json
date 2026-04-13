@@ -1,0 +1,90 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "S3AgentStateReadWrite",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::goclaw-agent-state",
+        "arn:aws:s3:::goclaw-agent-state/agents/${aws:PrincipalTag/agentId}/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "s3:prefix": ["agents/${aws:PrincipalTag/agentId}/"],
+          "aws:RequestedRegion": "us-east-1"
+        }
+      }
+    },
+    {
+      "Sid": "S3AgentStateListScoped",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::goclaw-agent-state",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": ["agents/${aws:PrincipalTag/agentId}/*"]
+        }
+      }
+    },
+    {
+      "Sid": "DenyOtherAgentState",
+      "Effect": "Deny",
+      "Action": "s3:*",
+      "Resource": "arn:aws:s3:::goclaw-agent-state/agents/*",
+      "Condition": {
+        "StringNotLike": {
+          "s3:prefix": ["agents/${aws:PrincipalTag/agentId}/*"]
+        },
+        "ForAnyValue:StringNotLike": {
+          "aws:ResourceTag/agentId": ["${aws:PrincipalTag/agentId}"]
+        }
+      }
+    },
+    {
+      "Sid": "CloudWatchLogsPerAgent",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams"
+      ],
+      "Resource": [
+        "arn:aws:logs:us-east-1:*:log-group:/goclaw/agents/${aws:PrincipalTag/agentId}",
+        "arn:aws:logs:us-east-1:*:log-group:/goclaw/agents/${aws:PrincipalTag/agentId}:*"
+      ]
+    },
+    {
+      "Sid": "SSMReadOwnConfig",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParametersByPath"
+      ],
+      "Resource": "arn:aws:ssm:us-east-1:*:parameter/goclaw/children/${aws:PrincipalTag/agentId}/*"
+    },
+    {
+      "Sid": "DenyEscalation",
+      "Effect": "Deny",
+      "Action": [
+        "iam:*",
+        "sts:AssumeRole",
+        "ecs:*",
+        "ec2:*",
+        "lambda:*",
+        "s3:PutBucketPolicy",
+        "s3:DeleteBucket",
+        "s3:PutBucketAcl",
+        "secretsmanager:*",
+        "cloudformation:*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
