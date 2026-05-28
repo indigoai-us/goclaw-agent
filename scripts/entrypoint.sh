@@ -2,17 +2,36 @@
 # entrypoint.sh — goClaw agent container entrypoint
 #
 # Lifecycle:
-#   1. Hydrate workspace from S3 (if configured)
+#   1. Hydrate workspace from S3 (if configured) — agent vault bucket (read-write)
+#      plus, in HQ Fleet vault mode, the company vault bucket (read-only mount)
 #   2. Start the agent server (configurable via GOCLAW_SERVER_CMD)
-#   3. On SIGTERM: snapshot workspace to S3, then exit
+#   3. On SIGTERM: snapshot workspace to S3 (agent vault bucket ONLY), then exit
 #
 # tini handles signal forwarding — this script sets up the SIGTERM trap
 # and delegates to the server process.
+#
+# Storage env-var contract (see scripts/workspace-sync.sh header for full detail).
+# HQ Fleet vault mode (preferred — DESIGN §4/§6, injected by the hq-pro fleet manager):
+#   HQ_VAULT_AGENT_BUCKET    — agent's own vault bucket (read-write; sole push target)
+#   HQ_VAULT_COMPANY_BUCKET  — company vault bucket (read-only mount; never pushed)
+#   HQ_AGENT_UID             — agent agt_... uid for log correlation
+#   HQ_COMPANY_MOUNT_PATH    — read-only company mount path (default /workspace/company)
+# Legacy standalone mode (backward compatible — used when HQ_VAULT_AGENT_BUCKET is unset):
+#   GOCLAW_S3_BUCKET, GOCLAW_AGENT_NAME
+# Common: GOCLAW_SYNC_PUSH (periodic push interval, seconds; default 60)
 
 set -euo pipefail
 
+# Agent UID (when injected by the fleet manager) is woven into log lines so fleet
+# logs can be correlated per agent (DESIGN US-013/US-017).
+AGENT_UID="${HQ_AGENT_UID:-}"
+
 log() {
-    echo "[entrypoint] $(date -u +%Y-%m-%dT%H:%M:%SZ) $*" >&2
+    if [ -n "$AGENT_UID" ]; then
+        echo "[entrypoint] $(date -u +%Y-%m-%dT%H:%M:%SZ) [${AGENT_UID}] $*" >&2
+    else
+        echo "[entrypoint] $(date -u +%Y-%m-%dT%H:%M:%SZ) $*" >&2
+    fi
 }
 
 SERVER_PID=""
@@ -24,6 +43,7 @@ SERVER_CMD="${GOCLAW_SERVER_CMD:-node /app/goclaw-agent/dist/server.js}"
 
 # ─── SIGTERM handler ─────────────────────────────────────────────────────────
 
+# shellcheck disable=SC2329  # invoked indirectly via `trap` below.
 handle_sigterm() {
     log "SIGTERM received — initiating graceful shutdown"
 
@@ -32,7 +52,7 @@ handle_sigterm() {
         kill -TERM "$SERVER_PID" 2>/dev/null || true
 
         local timeout=10
-        while [ $timeout -gt 0 ] && kill -0 "$SERVER_PID" 2>/dev/null; do
+        while [ "$timeout" -gt 0 ] && kill -0 "$SERVER_PID" 2>/dev/null; do
             sleep 1
             timeout=$((timeout - 1))
         done
@@ -51,7 +71,7 @@ handle_sigterm() {
 
     if [ "$SNAPSHOT_DONE" = false ]; then
         SNAPSHOT_DONE=true
-        log "Snapshotting workspace to S3..."
+        log "Snapshotting workspace to S3 (agent vault bucket only)..."
         /app/scripts/workspace-sync.sh snapshot || log "WARN: Snapshot failed (non-fatal)"
     fi
 
@@ -103,7 +123,7 @@ fi
 
 if [ "$SNAPSHOT_DONE" = false ]; then
     SNAPSHOT_DONE=true
-    log "Final workspace snapshot to S3..."
+    log "Final workspace snapshot to S3 (agent vault bucket only)..."
     /app/scripts/workspace-sync.sh snapshot || log "WARN: Final snapshot failed (non-fatal)"
 fi
 
